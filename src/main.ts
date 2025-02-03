@@ -1,12 +1,6 @@
 import { Application, Graphics, Text } from 'pixi.js'
+import { Vertex, rotatePoints, scaleAndShiftPoints } from './geometry' 
 import shapesData from './shapes.json' 
-
-// Define the structure of a single vertex
-interface Vertex {
-  x: number
-  y: number
-  radius?: number
-}
 
 // Define the structure of the shapes object
 interface ShapesJson {
@@ -29,29 +23,6 @@ const colours = [
 const widths = [
   2,4,6,8
 ]
-
-// Get vertices for a specific shape, rotated around centre.
-const rotatePoints = (points: Vertex[], angle: number) => {
-
-  const cosA = Math.cos(angle);
-  const sinA = Math.sin(angle);
-
-  const vertices: Vertex[] = points.map((vertex: Vertex) => ({
-    x: (cosA * vertex.x - sinA * vertex.y),
-    y: (sinA * vertex.x + cosA * vertex.y),
-    radius: vertex.radius
-  }))
-  return vertices
-}
-
-// scale and translate the points of a shape
-const scaleAndShiftPoints = (points: Vertex[], scale: number, deltaX: number, deltaY: number) => {
-  return points.map(point => ({
-    x: point.x * scale + deltaX,
-    y: point.y * scale + deltaY,
-    radius: point.radius ? point.radius * scale : undefined
-  }))
-}
 
 // Create the PixiJS application
 const app = new Application()
@@ -89,26 +60,23 @@ const defaultSize = 100.0;
     const rotatedPoints = rotatePoints(shapes[shapeNames[shapeIndex]], currentRotation)
     const scaledPoints = scaleAndShiftPoints(rotatedPoints, defaultSize * zoom, app.screen.width/2, app.screen.height/2)
 
-    if(shapeNames[shapeIndex] === "rounded rectangle") {
-
-      shape.moveTo(scaledPoints[0].x, scaledPoints[0].y)      
-      for(let i=1; i<=scaledPoints.length; i++) {
-        if(typeof scaledPoints[i % scaledPoints.length].radius !== 'undefined') {
-          shape.arcTo(
-            scaledPoints[i % scaledPoints.length].x, 
-            scaledPoints[i % scaledPoints.length].y,
-            scaledPoints[(i+1) % scaledPoints.length].x, 
-            scaledPoints[(i+1) % scaledPoints.length].y,
-            scaledPoints[(i) % scaledPoints.length].radius ||= 0
-          )
-        } else {
-          shape.lineTo(scaledPoints[i % scaledPoints.length].x, scaledPoints[i % scaledPoints.length].y)
-        }
+    shape.moveTo(scaledPoints[0].x, scaledPoints[0].y)      
+    for(let i=1; i<=scaledPoints.length; i++) {
+      // do an arc if we have a radius defined (for the rounded rectangle)
+      if(typeof scaledPoints[i % scaledPoints.length].radius !== 'undefined') {
+        shape.arcTo(
+          scaledPoints[i % scaledPoints.length].x, 
+          scaledPoints[i % scaledPoints.length].y,
+          scaledPoints[(i+1) % scaledPoints.length].x, 
+          scaledPoints[(i+1) % scaledPoints.length].y,
+          scaledPoints[(i) % scaledPoints.length].radius ||= 0
+        )
+      } else {
+        // otherwise straight line.
+        shape.lineTo(scaledPoints[i % scaledPoints.length].x, scaledPoints[i % scaledPoints.length].y)
       }
-    } else {
-      shape
-        .poly(scaledPoints)
     }
+    
     shape.fill(colours[bgIndex])
     .stroke({ color: colours[colourIndex], width: widths[widthIndex] })
 
@@ -156,7 +124,7 @@ const defaultSize = 100.0;
     console.log(key)
     renderScene()
   }
-  
+
   app.renderer.on('resize', () => {
     renderScene()
   })
@@ -165,6 +133,9 @@ const defaultSize = 100.0;
 
   app.stage.addChild(shape)
   app.stage.addChild(shapeText)
-  renderScene()
 
+  // we call renderScene three times in this code, here on init, on resize and after keypress. 
+  // Alternatively we could just call once in an ticker animation loop but that would be wasteful as 
+  // we're not actually doing animations. 
+  renderScene() 
 })()
